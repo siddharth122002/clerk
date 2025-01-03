@@ -1,6 +1,8 @@
 import { Webhook } from 'svix'
 import { headers } from 'next/headers'
-import { WebhookEvent } from '@clerk/nextjs/server'
+import { clerkClient, WebhookEvent } from '@clerk/nextjs/server'
+import { createUser } from '@/actions/user.actions'
+import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   const SIGNING_SECRET = process.env.SIGNING_SECRET
@@ -52,8 +54,29 @@ export async function POST(req: Request) {
   console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
   console.log('Webhook payload:', body)
   console.log("yuhoo");
-  if (evt.type === 'user.created') {
-    console.log('userId:', evt.data.id)
+  if(eventType === 'user.created') {
+    const { id, email_addresses, image_url, first_name, last_name, username } = evt.data;
+
+    const user = {
+      clerkId: id,
+      email: email_addresses[0].email_address,
+      username: username!,
+      firstName: first_name!,
+      lastName: last_name!,
+      photo: image_url,
+    }
+    const newUser = await createUser(user);
+
+    if(newUser) {
+      const clerk = await clerkClient();
+      await clerk.users.updateUserMetadata(id, {
+        publicMetadata: {
+          userId: newUser._id
+        }
+      })
+    }
+
+    return NextResponse.json({ message: 'OK', user: newUser })
   }
   if (evt.type === 'user.deleted') {
     console.log('userId: deleted though', evt.data.id)
